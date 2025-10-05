@@ -16,7 +16,8 @@ import { easing } from 'maath';
 import { EffectComposer } from '@react-three/postprocessing';
 import { Fluid } from '@whatisjery/react-fluid-distortion';
 
-import SelectiveChromaticAberrationEffect from './SelectiveChromaticAberration';
+// Change this import to use the new SelectiveBlur effect
+import SelectiveBlurEffect from './SelectiveBlur';
 
 
 type Mode = 'lens' | 'bar' | 'cube';
@@ -45,7 +46,8 @@ export default function FluidGlass({ mode = 'lens', lensProps = {}, barProps = {
         radius: 0.2,
         curl: 20,
         swirl: 10,
-        velocityDissipation: 0.97, // Lower this value to make waves travel further
+        velocityDissipation: 0.97,
+        blurStrength: 2.0, // Add blur strength parameter
     };
     
     // Merge default props with any user-provided props
@@ -100,14 +102,6 @@ interface ModeWrapperProps extends MeshProps {
     modeProps?: ModeProps;
 }
 
-interface ZoomMaterial extends THREE.Material {
-    zoom: number;
-}
-
-interface ZoomMesh extends THREE.Mesh<THREE.BufferGeometry, ZoomMaterial> { }
-
-type ZoomGroup = THREE.Group & { children: ZoomMesh[] };
-
 const ModeWrapper = memo(function ModeWrapper({
     children,
     glb,
@@ -150,12 +144,11 @@ const ModeWrapper = memo(function ModeWrapper({
         gl.setClearColor(0x5227ff, 1);
     });
 
-    const { scale, ior, thickness, anisotropy, chromaticAberration, ...extraMat } = modeProps as {
+    // Removed ior, chromaticAberration from the destructuring
+    const { scale, thickness, anisotropy, ...extraMat } = modeProps as {
         scale?: number;
-        ior?: number;
         thickness?: number;
         anisotropy?: number;
-        chromaticAberration?: number;
         [key: string]: unknown;
     };
 
@@ -175,10 +168,8 @@ const ModeWrapper = memo(function ModeWrapper({
             >
                 <MeshTransmissionMaterial
                     buffer={buffer.texture}
-                    ior={ior ?? 1.15}
                     thickness={thickness ?? 5}
                     anisotropy={anisotropy ?? 0.01}
-                    chromaticAberration={chromaticAberration ?? 0.1}
                     {...(typeof extraMat === 'object' && extraMat !== null ? extraMat : {})}
                 />
             </mesh>
@@ -196,7 +187,22 @@ function Lens({ modeProps, children, ...p }: { modeProps?: ModeProps; children?:
         state.gl.setRenderTarget(null);
     }, -1); 
 
-    const effect = useMemo(() => new SelectiveChromaticAberrationEffect(cleanTarget.texture), [cleanTarget.texture]);
+    // Extract blur parameters from modeProps
+    const blurStrength = (modeProps as { blurStrength?: number })?.blurStrength ?? 2.0;
+    const blurRadius = (modeProps as { blurRadius?: number })?.blurRadius ?? 0.3;
+    
+    const effect = useMemo(
+        () => new SelectiveBlurEffect(cleanTarget.texture, blurStrength, blurRadius),
+        [cleanTarget.texture, blurStrength, blurRadius]
+    );
+
+    // Update mouse position in the effect
+    useFrame((state) => {
+        // Convert pointer from -1 to 1 range to 0 to 1 range for UV coordinates
+        const mouseX = (state.pointer.x + 1) / 2;
+        const mouseY = (state.pointer.y + 1) / 2;
+        effect.setMousePosition(mouseX, mouseY);
+    });
 
     return (
         <>
@@ -219,7 +225,6 @@ function Bar({ modeProps = {}, ...p }: { modeProps?: ModeProps } & MeshProps) {
         transmission: 1,
         roughness: 0,
         thickness: 10,
-        ior: 1.15,
         color: '#ffffff',
         attenuationColor: '#ffffff',
         attenuationDistance: 0.25
@@ -303,6 +308,14 @@ function NavItems({ items }: { items: NavItem[] }) {
         </group>
     );
 }
+
+interface ZoomMaterial extends THREE.Material {
+    zoom: number;
+}
+
+interface ZoomMesh extends THREE.Mesh<THREE.BufferGeometry, ZoomMaterial> { }
+
+type ZoomGroup = THREE.Group & { children: ZoomMesh[] };
 
 function Images() {
     const group = useRef<ZoomGroup>(null!);
