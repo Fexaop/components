@@ -10,9 +10,6 @@ import {
     Scroll,
     Preload,
 } from '@react-three/drei';
-import { Fluid } from '@whatisjery/react-fluid-distortion';
-
-// Custom types
 interface ZoomableImageMaterial extends THREE.ShaderMaterial {
     zoom: number;
 }
@@ -383,9 +380,6 @@ function Typography() {
 export default function ReactCanvas() {
     return (
         <Canvas camera={{ position: [0, 0, 20], fov: 15 }} gl={{ alpha: false }}>
-            {/* Fluid distortion in the background */}
-            
-            
             <ScrollControls damping={0.2} pages={3} distance={0.4}>
                 <MotionDistortion>
                     <Scroll>
