@@ -1,3 +1,4 @@
+/* FluidGlass.tsx */
 import * as THREE from 'three';
 import { useRef, useState, useEffect, memo, ReactNode, useMemo } from 'react';
 import { Canvas, createPortal, useFrame, useThree, ThreeElements } from '@react-three/fiber';
@@ -16,7 +17,7 @@ import { easing } from 'maath';
 import { EffectComposer } from '@react-three/postprocessing';
 import { Fluid } from '@whatisjery/react-fluid-distortion';
 
-// Change this import to use the new SelectiveBlur effect
+// Import the updated SelectiveBlur effect
 import SelectiveBlurEffect from './SelectiveBlur';
 
 
@@ -47,7 +48,8 @@ export default function FluidGlass({ mode = 'lens', lensProps = {}, barProps = {
         curl: 20,
         swirl: 10,
         velocityDissipation: 0.97,
-        blurStrength: 2.0, // Add blur strength parameter
+        // Increased default blur strength to showcase the new effect
+        blurStrength: 10.0, 
     };
     
     // Merge default props with any user-provided props
@@ -90,6 +92,8 @@ export default function FluidGlass({ mode = 'lens', lensProps = {}, barProps = {
         </Canvas>
     );
 }
+
+// ... (The rest of the file remains exactly the same) ...
 
 type MeshProps = ThreeElements['mesh'];
 
@@ -188,7 +192,7 @@ function Lens({ modeProps, children, ...p }: { modeProps?: ModeProps; children?:
     }, -1); 
 
     // Extract blur parameters from modeProps
-    const blurStrength = (modeProps as { blurStrength?: number })?.blurStrength ?? 2.0;
+    const blurStrength = (modeProps as { blurStrength?: number })?.blurStrength ?? 10.0;
     const blurRadius = (modeProps as { blurRadius?: number })?.blurRadius ?? 0.3;
     
     const effect = useMemo(

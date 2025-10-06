@@ -8,55 +8,63 @@ const fragmentShader = `
   uniform float blurStrength;
   uniform vec2 mousePos;
   uniform float blurRadius;
+
+  // A more robust random function for noise
+  float random(vec2 p) {
+      return fract(sin(dot(p.xy, vec2(12.9898, 78.233))) * 43758.5453);
+  }
   
   void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor) {
     // Calculate distance from mouse position
     float dist = distance(uv, mousePos);
     
     // Create a radial mask around the mouse position
-    // Only apply blur near where the mouse is interacting
     float radialMask = 1.0 - smoothstep(0.0, blurRadius, dist);
     
-    // Get the color of the original, undistorted scene
+    // Get the original and distorted scene colors
     vec4 originalColor = texture2D(cleanTexture, uv);
     vec4 distortedColor = texture2D(inputBuffer, uv);
     
-    // Calculate the color difference (distortion indicator)
+    // Calculate the color difference to determine where distortion is happening
     float colorDiff = length(distortedColor.rgb - originalColor.rgb);
     
     // Create a mask based on color difference
-    float distortionMask = smoothstep(0.02, 0.15, colorDiff);
+    float distortionMask = smoothstep(0.01, 0.1, colorDiff);
     
-    // Combine both masks: only blur where there's both distortion AND near mouse
+    // Combine masks: blur where there is distortion AND it's near the mouse
     float finalMask = radialMask * distortionMask;
+    finalMask = clamp(finalMask, 0.0, 1.0);
     
-    // Clamp the mask
-    finalMask = clamp(finalMask, 0.0, 0.85);
-    
-    // Only apply blur if mask is significant
     if (finalMask > 0.01) {
+      // --- High-Quality Rotational Blur ---
       vec4 blurredColor = vec4(0.0);
       
-      // Gaussian blur sampling - 9-tap blur kernel
-      float blurSize = 0.004 * finalMask * blurStrength;
+      // Use blurStrength and the mask to control the blur radius
+      // A larger magic number (e.g., 0.01) makes the blur stronger
+      float blurAmount = blurStrength * finalMask * 0.008; 
       
-      // Sample pattern for Gaussian blur
-      blurredColor += texture2D(inputBuffer, uv + vec2(-blurSize, -blurSize)) * 0.0625;
-      blurredColor += texture2D(inputBuffer, uv + vec2(0.0, -blurSize)) * 0.125;
-      blurredColor += texture2D(inputBuffer, uv + vec2(blurSize, -blurSize)) * 0.0625;
+      const int samples = 16; // Increase samples for higher quality
+
+      // Sample in a spiral/rotational pattern for a smooth blur
+      for (int i = 0; i < samples; i++) {
+          float angle = float(i) / float(samples) * 2.0 * 3.1415926535;
+          float radius = float(i) / float(samples) * blurAmount;
+          vec2 offset = vec2(cos(angle), sin(angle)) * radius;
+          blurredColor += texture2D(inputBuffer, uv + offset);
+      }
       
-      blurredColor += texture2D(inputBuffer, uv + vec2(-blurSize, 0.0)) * 0.125;
-      blurredColor += texture2D(inputBuffer, uv) * 0.25;
-      blurredColor += texture2D(inputBuffer, uv + vec2(blurSize, 0.0)) * 0.125;
+      // Average the samples
+      blurredColor /= float(samples);
       
-      blurredColor += texture2D(inputBuffer, uv + vec2(-blurSize, blurSize)) * 0.0625;
-      blurredColor += texture2D(inputBuffer, uv + vec2(0.0, blurSize)) * 0.125;
-      blurredColor += texture2D(inputBuffer, uv + vec2(blurSize, blurSize)) * 0.0625;
+      // Add subtle noise for a frosted glass effect
+      float noise = (random(uv) - 0.5) * 0.03;
+      blurredColor.rgb += noise;
       
-      // Mix between the distorted color and the blurred version
+      // Mix between the distorted color and the heavily blurred version
       outputColor = mix(distortedColor, blurredColor, finalMask);
+
     } else {
-      // If mask is too small, just use the distorted color as-is
+      // If no blur is needed, output the distorted color
       outputColor = distortedColor;
     }
   }
@@ -64,7 +72,7 @@ const fragmentShader = `
 
 /* Define the custom effect class */
 export default class SelectiveBlurEffect extends Effect {
-  constructor(cleanTexture, blurStrength = 2.0, blurRadius = 0.3) {
+  constructor(cleanTexture, blurStrength = 10.0, blurRadius = 0.3) {
     super(
       'SelectiveBlurEffect',
       fragmentShader,
